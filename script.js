@@ -1,4 +1,5 @@
 document.getElementById("processBtn").addEventListener("click", async () => {
+  console.log("Button clicked!");
   const pdfFile = document.getElementById("pdfInput").files[0];
   const excelFile = document.getElementById("excelInput").files[0];
   const outputDiv = document.getElementById("output");
