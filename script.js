@@ -57,27 +57,31 @@ document.addEventListener("DOMContentLoaded", () => {
       const lastCol = cols.pop();
       cols.splice(2, 0, lastCol); // move NAME to position 2
 
-      // --- Page + layout constants ---
+      // --- Page constants ---
       const pageWidth = 595;
       const pageHeight = 842;
       const margin = 30;
-      const headerHeight = 30;
+      const headerHeight = 32;
       const fontFamily = "Arial";
       const fontSize = 10;
-      const lineHeight = 14;
-      const padding = 6;
+      const lineHeight = 15;
+      const padding = 8;
+
+      // 2× render scale for crispness
+      const scaleFactor = 2;
+      const renderWidth = pageWidth * scaleFactor;
+      const renderHeight = pageHeight * scaleFactor;
 
       const measureCanvas = document.createElement("canvas");
       const measureCtx = measureCanvas.getContext("2d");
       measureCtx.font = `${fontSize}px ${fontFamily}`;
 
-      // --- Step 3: Compute better column widths ---
+      // --- Step 3: Compute column widths ---
       const baseWidths = {};
       const minWidth = 60;
-      const maxWidth = 180;
+      const maxWidth = 200;
 
       cols.forEach((c) => {
-        // Measure both the header and sample data
         let widestText = c;
         for (const row of groupedArr.slice(0, 50)) {
           const val = row[c] ? String(row[c]) : "";
@@ -86,19 +90,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const headerWidth = measureCtx.measureText(c).width;
         const contentWidth = measureCtx.measureText(widestText).width;
         let w = Math.max(headerWidth, contentWidth) + padding * 2;
-        if (c === "NAME") w *= 1.6; // give extra room for names
+
+        // Apply specific width boosts
+        if (c === "NAME") w *= 1.6;
+        if (c === "DATE") w *= 1.3;
+        if (c === "TOTAL $ P") w *= 1.4;
+        if (c === "Duration") w *= 1.3;
+        if (c === "Hourly Rate") w *= 1.3;
+
         baseWidths[c] = Math.min(Math.max(w, minWidth), maxWidth);
       });
 
-      // Scale widths to fit page
       const totalWidth = Object.values(baseWidths).reduce((a, b) => a + b, 0);
       const scale = (pageWidth - margin * 2) / totalWidth;
       const colWidths = cols.map((c) => baseWidths[c] * scale);
 
-      // --- Step 4: Wrap text correctly (preserve names & spaces) ---
+      // --- Step 4: Smart wrap ---
       function wrapTextSmart(ctx, text, maxWidth) {
         if (!text) return [""];
-        // Respect explicit newlines (like multiple NAMEs)
         const paragraphs = String(text).split(/\r?\n/);
         const linesOut = [];
 
@@ -108,15 +117,13 @@ document.addEventListener("DOMContentLoaded", () => {
             continue;
           }
 
-          // Split by spaces, but keep punctuation and ensure spaces between tokens
           const tokens = para.split(/(\s+)/).filter((t) => t.length > 0);
           let line = "";
           for (const token of tokens) {
-            const trial = line + token; // preserve space as-is
+            const trial = line + token;
             const width = ctx.measureText(trial).width;
             if (width > maxWidth - padding * 2 && line.trim().length) {
               linesOut.push(line.trim());
-              // start new line without stripping space at beginning
               line = token.trimStart();
             } else {
               line = trial;
@@ -128,25 +135,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return linesOut.length ? linesOut : [""];
       }
 
-      // --- Step 5: Render paginated styled pages ---
+      // --- Step 5: Render high-res pages ---
       const pageCanvases = [];
       let currentRows = [];
       let currentHeight = margin + headerHeight + padding;
 
       const renderPage = (rows) => {
         const canvas = document.createElement("canvas");
-        canvas.width = pageWidth;
-        canvas.height = pageHeight;
+        canvas.width = renderWidth;
+        canvas.height = renderHeight;
         const ctx = canvas.getContext("2d");
+        ctx.scale(scaleFactor, scaleFactor);
+        ctx.imageSmoothingQuality = "high";
 
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, pageWidth, pageHeight);
 
-        // Header background
-        ctx.fillStyle = "#555";
+        // Header
+        ctx.fillStyle = "#444";
         ctx.fillRect(margin, margin, pageWidth - margin * 2, headerHeight);
-
-        // Header text
         ctx.fillStyle = "white";
         ctx.font = `bold ${fontSize}px ${fontFamily}`;
         let x = margin;
@@ -166,7 +173,7 @@ document.addEventListener("DOMContentLoaded", () => {
           x += colWidths[i];
         });
 
-        // Table rows
+        // Table body
         let y = margin + headerHeight;
         ctx.font = `${fontSize}px ${fontFamily}`;
         ctx.fillStyle = "#000";
@@ -178,9 +185,9 @@ document.addEventListener("DOMContentLoaded", () => {
           const maxLines = Math.max(...cellLines.map((l) => l.length));
           const rowHeight = maxLines * lineHeight + padding * 2;
 
-          // Alternating row color
+          // Alternating background
           if ((rows.indexOf(row) % 2) === 1) {
-            ctx.fillStyle = "#f8f8f8";
+            ctx.fillStyle = "#f5f5f5";
             ctx.fillRect(margin, y, pageWidth - margin * 2, rowHeight);
             ctx.fillStyle = "#000";
           }
@@ -197,7 +204,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             x += colWidths[i];
           }
-
           y += rowHeight;
         }
 
@@ -223,7 +229,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentRows.length) renderPage(currentRows);
 
-      // --- Step 6: Merge with original PDF ---
+      // --- Step 6: Merge into PDF ---
       const pdfBytes = await pdfFile.arrayBuffer();
       const originalPdf = await PDFLib.PDFDocument.load(pdfBytes);
       const newPdf = await PDFLib.PDFDocument.create();
