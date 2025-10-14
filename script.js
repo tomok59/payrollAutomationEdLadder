@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const lastCol = cols.pop();
       cols.splice(2, 0, lastCol); // move NAME to position 2
 
-      // --- Step 3: Page and style setup ---
+      // --- Page + layout constants ---
       const pageWidth = 595;
       const pageHeight = 842;
       const margin = 30;
@@ -71,53 +71,64 @@ document.addEventListener("DOMContentLoaded", () => {
       const measureCtx = measureCanvas.getContext("2d");
       measureCtx.font = `${fontSize}px ${fontFamily}`;
 
-      // --- Step 4: Calculate dynamic column widths ---
+      // --- Step 3: Compute better column widths ---
       const baseWidths = {};
       const minWidth = 60;
       const maxWidth = 180;
 
       cols.forEach((c) => {
-        let maxText = c;
-        for (const row of groupedArr.slice(0, 30)) {
-          if (row[c] && String(row[c]).length > maxText.length) {
-            maxText = String(row[c]);
-          }
+        // Measure both the header and sample data
+        let widestText = c;
+        for (const row of groupedArr.slice(0, 50)) {
+          const val = row[c] ? String(row[c]) : "";
+          if (val.length > widestText.length) widestText = val;
         }
-        let w = measureCtx.measureText(maxText).width + padding * 2;
-        if (c === "NAME") w *= 1.5; // give NAME extra space
+        const headerWidth = measureCtx.measureText(c).width;
+        const contentWidth = measureCtx.measureText(widestText).width;
+        let w = Math.max(headerWidth, contentWidth) + padding * 2;
+        if (c === "NAME") w *= 1.6; // give extra room for names
         baseWidths[c] = Math.min(Math.max(w, minWidth), maxWidth);
       });
 
+      // Scale widths to fit page
       const totalWidth = Object.values(baseWidths).reduce((a, b) => a + b, 0);
       const scale = (pageWidth - margin * 2) / totalWidth;
       const colWidths = cols.map((c) => baseWidths[c] * scale);
 
-      // --- Step 5: Improved wrapping (no mid-name breaks) ---
-      function wrapTextSmart(ctx, text, maxWidth, preserveNewlines = true) {
+      // --- Step 4: Wrap text correctly (preserve names & spaces) ---
+      function wrapTextSmart(ctx, text, maxWidth) {
         if (!text) return [""];
-        const paragraphs = preserveNewlines ? String(text).split(/\r?\n/) : [String(text)];
-        const wrappedLines = [];
+        // Respect explicit newlines (like multiple NAMEs)
+        const paragraphs = String(text).split(/\r?\n/);
+        const linesOut = [];
 
         for (const para of paragraphs) {
-          const tokens = para.split(/(\s+|,)/).filter((t) => t.trim().length > 0 || t === " ");
+          if (!para.trim()) {
+            linesOut.push("");
+            continue;
+          }
+
+          // Split by spaces, but keep punctuation and ensure spaces between tokens
+          const tokens = para.split(/(\s+)/).filter((t) => t.length > 0);
           let line = "";
           for (const token of tokens) {
-            const testLine = line ? line + token : token;
-            const width = ctx.measureText(testLine).width;
-            if (width > maxWidth - padding * 2) {
-              if (line.trim()) wrappedLines.push(line.trim());
-              line = token.trim();
+            const trial = line + token; // preserve space as-is
+            const width = ctx.measureText(trial).width;
+            if (width > maxWidth - padding * 2 && line.trim().length) {
+              linesOut.push(line.trim());
+              // start new line without stripping space at beginning
+              line = token.trimStart();
             } else {
-              line = testLine;
+              line = trial;
             }
           }
-          if (line.trim()) wrappedLines.push(line.trim());
-          else if (!para.trim()) wrappedLines.push("");
+          if (line.trim().length) linesOut.push(line.trim());
         }
-        return wrappedLines.length ? wrappedLines : [""];
+
+        return linesOut.length ? linesOut : [""];
       }
 
-      // --- Step 6: Render pages ---
+      // --- Step 5: Render paginated styled pages ---
       const pageCanvases = [];
       let currentRows = [];
       let currentHeight = margin + headerHeight + padding;
@@ -128,20 +139,20 @@ document.addEventListener("DOMContentLoaded", () => {
         canvas.height = pageHeight;
         const ctx = canvas.getContext("2d");
 
-        // Background
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, pageWidth, pageHeight);
 
-        // Header
+        // Header background
         ctx.fillStyle = "#555";
         ctx.fillRect(margin, margin, pageWidth - margin * 2, headerHeight);
+
+        // Header text
         ctx.fillStyle = "white";
         ctx.font = `bold ${fontSize}px ${fontFamily}`;
-
         let x = margin;
         cols.forEach((c, i) => {
           const tx = x + padding;
-          const ty = margin + 20;
+          const ty = margin + headerHeight / 2 + fontSize / 2;
           ctx.fillText(c, tx, ty);
           x += colWidths[i];
         });
@@ -155,26 +166,25 @@ document.addEventListener("DOMContentLoaded", () => {
           x += colWidths[i];
         });
 
-        // Rows
+        // Table rows
         let y = margin + headerHeight;
         ctx.font = `${fontSize}px ${fontFamily}`;
         ctx.fillStyle = "#000";
 
         for (const row of rows) {
-          const cellLines = cols.map((c) =>
-            wrapTextSmart(measureCtx, String(row[c] ?? ""), colWidths[cols.indexOf(c)])
+          const cellLines = cols.map((c, i) =>
+            wrapTextSmart(measureCtx, String(row[c] ?? ""), colWidths[i])
           );
           const maxLines = Math.max(...cellLines.map((l) => l.length));
           const rowHeight = maxLines * lineHeight + padding * 2;
 
-          // Optional: alternating row color
+          // Alternating row color
           if ((rows.indexOf(row) % 2) === 1) {
             ctx.fillStyle = "#f8f8f8";
             ctx.fillRect(margin, y, pageWidth - margin * 2, rowHeight);
             ctx.fillStyle = "#000";
           }
 
-          // Borders and text
           x = margin;
           for (let i = 0; i < cols.length; i++) {
             ctx.strokeStyle = "#aaa";
@@ -195,8 +205,8 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       for (const row of groupedArr) {
-        const cellLines = cols.map((c) =>
-          wrapTextSmart(measureCtx, String(row[c] ?? ""), colWidths[cols.indexOf(c)])
+        const cellLines = cols.map((c, i) =>
+          wrapTextSmart(measureCtx, String(row[c] ?? ""), colWidths[i])
         );
         const maxLines = Math.max(...cellLines.map((l) => l.length));
         const rowHeight = maxLines * lineHeight + padding * 2;
@@ -213,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentRows.length) renderPage(currentRows);
 
-      // --- Step 7: Combine with original PDF ---
+      // --- Step 6: Merge with original PDF ---
       const pdfBytes = await pdfFile.arrayBuffer();
       const originalPdf = await PDFLib.PDFDocument.load(pdfBytes);
       const newPdf = await PDFLib.PDFDocument.create();
