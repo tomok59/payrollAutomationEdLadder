@@ -22,7 +22,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // --- Step 2: Process like pandas ---
+      // --- Step 2: Read first page of PDF to get size ---
+      const pdfBytes = await pdfFile.arrayBuffer();
+      const tempPdf = await PDFLib.PDFDocument.load(pdfBytes);
+      const [firstPage] = await tempPdf.copyPages(tempPdf, [0]);
+      const { width: pageWidth, height: pageHeight } = firstPage.getSize();
+
+      // --- Step 3: Process Excel data ---
       data.sort((a, b) => {
         const dateA = new Date(a["DATE"]);
         const dateB = new Date(b["DATE"]);
@@ -57,9 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const lastCol = cols.pop();
       cols.splice(2, 0, lastCol); // move NAME to position 2
 
-      // --- Page constants ---
-      const pageWidth = 595;
-      const pageHeight = 842;
+      // --- Layout constants ---
       const margin = 30;
       const headerHeight = 32;
       const fontFamily = "Arial";
@@ -67,16 +71,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const lineHeight = 15;
       const padding = 8;
 
-      // 2× render scale for crispness
-      const scaleFactor = 2;
-      const renderWidth = pageWidth * scaleFactor;
-      const renderHeight = pageHeight * scaleFactor;
+      // --- Step 4: High-resolution setup (300 DPI) ---
+      const DPI = 300;
+      const scaleFactor = DPI / 72; // ~4.1667 for 300dpi
+      const renderWidth = Math.floor(pageWidth * scaleFactor);
+      const renderHeight = Math.floor(pageHeight * scaleFactor);
 
       const measureCanvas = document.createElement("canvas");
       const measureCtx = measureCanvas.getContext("2d");
       measureCtx.font = `${fontSize}px ${fontFamily}`;
 
-      // --- Step 3: Compute column widths ---
+      // --- Step 5: Compute column widths with boosts ---
       const baseWidths = {};
       const minWidth = 60;
       const maxWidth = 200;
@@ -91,7 +96,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const contentWidth = measureCtx.measureText(widestText).width;
         let w = Math.max(headerWidth, contentWidth) + padding * 2;
 
-        // Apply specific width boosts
         if (c === "NAME") w *= 1.6;
         if (c === "DATE") w *= 1.3;
         if (c === "TOTAL $ P") w *= 1.4;
@@ -105,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const scale = (pageWidth - margin * 2) / totalWidth;
       const colWidths = cols.map((c) => baseWidths[c] * scale);
 
-      // --- Step 4: Smart wrap ---
+      // --- Step 6: Smart wrapping ---
       function wrapTextSmart(ctx, text, maxWidth) {
         if (!text) return [""];
         const paragraphs = String(text).split(/\r?\n/);
@@ -116,7 +120,6 @@ document.addEventListener("DOMContentLoaded", () => {
             linesOut.push("");
             continue;
           }
-
           const tokens = para.split(/(\s+)/).filter((t) => t.length > 0);
           let line = "";
           for (const token of tokens) {
@@ -131,11 +134,10 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           if (line.trim().length) linesOut.push(line.trim());
         }
-
         return linesOut.length ? linesOut : [""];
       }
 
-      // --- Step 5: Render high-res pages ---
+      // --- Step 7: Render high-DPI table pages ---
       const pageCanvases = [];
       let currentRows = [];
       let currentHeight = margin + headerHeight + padding;
@@ -151,9 +153,11 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, pageWidth, pageHeight);
 
-        // Header
+        // Header background
         ctx.fillStyle = "#444";
         ctx.fillRect(margin, margin, pageWidth - margin * 2, headerHeight);
+
+        // Header text
         ctx.fillStyle = "white";
         ctx.font = `bold ${fontSize}px ${fontFamily}`;
         let x = margin;
@@ -185,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const maxLines = Math.max(...cellLines.map((l) => l.length));
           const rowHeight = maxLines * lineHeight + padding * 2;
 
-          // Alternating background
+          // Alternate row shading
           if ((rows.indexOf(row) % 2) === 1) {
             ctx.fillStyle = "#f5f5f5";
             ctx.fillRect(margin, y, pageWidth - margin * 2, rowHeight);
@@ -229,12 +233,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentRows.length) renderPage(currentRows);
 
-      // --- Step 6: Merge into PDF ---
-      const pdfBytes = await pdfFile.arrayBuffer();
-      const originalPdf = await PDFLib.PDFDocument.load(pdfBytes);
+      // --- Step 8: Merge with original PDF ---
       const newPdf = await PDFLib.PDFDocument.create();
-      const [firstPage] = await newPdf.copyPages(originalPdf, [0]);
-      newPdf.addPage(firstPage);
+      const [origFirstPage] = await newPdf.copyPages(tempPdf, [0]);
+      newPdf.addPage(origFirstPage);
 
       for (const canvas of pageCanvases) {
         const imgUrl = canvas.toDataURL("image/png");
@@ -249,8 +251,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const link = document.createElement("a");
       link.href = url;
-      link.download = "merged.pdf";
-      link.textContent = "Download Combined PDF";
+      link.download = "merged_highres.pdf";
+      link.textContent = "Download High-Resolution PDF";
       link.classList.add("download-link");
       outputDiv.appendChild(link);
     } catch (err) {
