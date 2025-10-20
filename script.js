@@ -28,38 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const [firstPage] = await tempPdf.copyPages(tempPdf, [0]);
       const { width: pageWidth, height: pageHeight } = firstPage.getSize();
 
-      // --- Step 3: Process Excel data ---
-      data.sort((a, b) => {
-        const dateA = new Date(a["DATE"]);
-        const dateB = new Date(b["DATE"]);
-        if (dateA - dateB !== 0) return dateA - dateB;
-        return (a["From"] || "").localeCompare(b["From"] || "");
-      });
-
-      const groupKeys = [
-        "SCHOOL",
-        "TUTOR",
-        "Session ID",
-        "HRS",
-        "DATE",
-        "Duration",
-        "Hourly Rate",
-        "TOTAL $ P",
-      ];
-
-      const grouped = {};
-      for (const row of data) {
-        const key = groupKeys.map((k) => row[k]).join("|");
-        if (!grouped[key]) grouped[key] = { ...row, NAME: new Set() };
-        grouped[key].NAME.add(row["NAME"]);
-      }
-
-      let groupedArr = Object.values(grouped).map((obj) => ({
-        ...obj,
-        NAME: Array.from(obj.NAME).join("\n"),
-      }));
-
-            // --- Define column order explicitly ---
+      // --- Step 3: Define fixed column order ---
       const cols = [
         "SCHOOL",
         "TUTOR",
@@ -72,17 +41,28 @@ document.addEventListener("DOMContentLoaded", () => {
         "TOTAL $ P",
       ];
 
+      // --- Step 4: Group names for multiple entries ---
+      const grouped = {};
+      for (const row of data) {
+        const key = cols.map((k) => row[k] ?? "").join("|");
+        if (!grouped[key]) grouped[key] = { ...row, NAME: new Set() };
+        grouped[key].NAME.add(row["NAME"]);
+      }
 
-      // --- Layout constants ---
+      const groupedArr = Object.values(grouped).map((obj) => ({
+        ...obj,
+        NAME: Array.from(obj.NAME).join("\n"),
+      }));
+
+      // --- Step 5: Layout settings ---
       const margin = 30;
       const fontFamily = "Arial";
       const fontSize = 8;
       const lineHeight = 15;
       const padding = 8;
 
-      // --- Step 4: High-resolution setup (300 DPI) ---
       const DPI = 300;
-      const scaleFactor = DPI / 72; // ~4.1667 for 300dpi
+      const scaleFactor = DPI / 72;
       const renderWidth = Math.floor(pageWidth * scaleFactor);
       const renderHeight = Math.floor(pageHeight * scaleFactor);
 
@@ -90,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const measureCtx = measureCanvas.getContext("2d");
       measureCtx.font = `${fontSize}px ${fontFamily}`;
 
-      // --- Step 5: Compute column widths with boosts ---
+      // --- Step 6: Column widths ---
       const baseWidths = {};
       const minWidth = 60;
       const maxWidth = 200;
@@ -105,10 +85,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const contentWidth = measureCtx.measureText(widestText).width;
         let w = Math.max(headerWidth, contentWidth) + padding * 2;
 
-        if (c === "NAME") w *= 1.3;
-        if (c === "DATE") w *= 1.5;
+        if (c === "NAME") w *= 1.6;
+        if (c === "DATE") w *= 1.6;
         if (c === "TOTAL $ P") w *= 1.1;
-        if (c === "Date") w *= 1.3;
         if (c === "Hourly Rate") w *= 1.1;
 
         baseWidths[c] = Math.min(Math.max(w, minWidth), maxWidth);
@@ -118,7 +97,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const scale = (pageWidth - margin * 2) / totalWidth;
       const colWidths = cols.map((c) => baseWidths[c] * scale);
 
-      // --- Step 6: Smart wrapping ---
       function wrapTextSmart(ctx, text, maxWidth) {
         if (!text) return [""];
         const paragraphs = String(text).split(/\r?\n/);
@@ -146,19 +124,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return linesOut.length ? linesOut : [""];
       }
 
-
-        // --- Compute dynamic header height based on wrapped column names ---
+      // --- Step 7: Header height ---
       const headerLines = cols.map((c, i) =>
         wrapTextSmart(measureCtx, c, colWidths[i])
       );
-      const maxHeaderLines = Math.max(...headerLines.map(l => l.length));
+      const maxHeaderLines = Math.max(...headerLines.map((l) => l.length));
       const headerHeight = maxHeaderLines * lineHeight + padding * 2;
 
-      // --- Step 7: Render high-DPI table pages ---
+      // --- Step 8: Render table pages ---
       const pageCanvases = [];
       let currentRows = [];
       let currentHeight = margin + headerHeight + padding;
-
 
       const renderPage = (rows) => {
         const canvas = document.createElement("canvas");
@@ -172,14 +148,13 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.fillRect(0, 0, pageWidth, pageHeight);
 
         // Header background
-        ctx.fillStyle = "#2682e0";
+        ctx.fillStyle = "#2682e0"; // fixed blue color
         ctx.fillRect(margin, margin, pageWidth - margin * 2, headerHeight);
 
-                // --- Multi-line Header Text ---
+        // Header text
         ctx.fillStyle = "white";
         ctx.font = `bold ${fontSize}px ${fontFamily}`;
         let x = margin;
-
         cols.forEach((c, i) => {
           const lines = headerLines[i];
           const totalHeight = lines.length * lineHeight;
@@ -188,32 +163,10 @@ document.addEventListener("DOMContentLoaded", () => {
           for (let j = 0; j < lines.length; j++) {
             const tx = x + padding;
             const ty = yStart + j * lineHeight;
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, margin, colWidths[i], headerHeight);
-            ctx.clip();
-            ctx.fillText(lines[j], tx, ty);
-            ctx.restore();
-          }
-
-          x += colWidths[i];
-        });
-
-        
-        cols.forEach((c, i) => {
-          const lines = wrapTextSmart(measureCtx, c, colWidths[i]); // reuse smart wrapper
-          const totalHeight = lines.length * lineHeight;
-          let yStart = margin + (headerHeight - totalHeight) / 2 + fontSize / 2;
-        
-          for (let j = 0; j < lines.length; j++) {
-            const tx = x + padding;
-            const ty = yStart + j * lineHeight;
             ctx.fillText(lines[j], tx, ty);
           }
-        
           x += colWidths[i];
         });
-
 
         // Header grid
         ctx.strokeStyle = "#000";
@@ -236,7 +189,6 @@ document.addEventListener("DOMContentLoaded", () => {
           const maxLines = Math.max(...cellLines.map((l) => l.length));
           const rowHeight = maxLines * lineHeight + padding * 2;
 
-          // Alternate row shading
           if ((rows.indexOf(row) % 2) === 1) {
             ctx.fillStyle = "#f5f5f5";
             ctx.fillRect(margin, y, pageWidth - margin * 2, rowHeight);
@@ -280,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentRows.length) renderPage(currentRows);
 
-      // --- Step 8: Merge with original PDF ---
+      // --- Step 9: Merge with original PDF ---
       const newPdf = await PDFLib.PDFDocument.create();
       const [origFirstPage] = await newPdf.copyPages(tempPdf, [0]);
       newPdf.addPage(origFirstPage);
