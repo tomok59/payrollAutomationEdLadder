@@ -157,16 +157,25 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.fillStyle = "#444";
         ctx.fillRect(margin, margin, pageWidth - margin * 2, headerHeight);
 
-        // Header text
+        // --- Multi-line Header Text ---
         ctx.fillStyle = "white";
         ctx.font = `bold ${fontSize}px ${fontFamily}`;
         let x = margin;
+        
         cols.forEach((c, i) => {
-          const tx = x + padding;
-          const ty = margin + headerHeight / 2 + fontSize / 2;
-          ctx.fillText(c, tx, ty);
+          const lines = wrapTextSmart(measureCtx, c, colWidths[i]); // reuse smart wrapper
+          const totalHeight = lines.length * lineHeight;
+          let yStart = margin + (headerHeight - totalHeight) / 2 + fontSize / 2;
+        
+          for (let j = 0; j < lines.length; j++) {
+            const tx = x + padding;
+            const ty = yStart + j * lineHeight;
+            ctx.fillText(lines[j], tx, ty);
+          }
+        
           x += colWidths[i];
         });
+
 
         // Header grid
         ctx.strokeStyle = "#000";
