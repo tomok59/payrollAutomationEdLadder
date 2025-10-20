@@ -260,8 +260,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const link = document.createElement("a");
       link.href = url;
-      link.download = "merged_highres.pdf";
-      link.textContent = "Download High-Resolution PDF";
+      link.download = "invoice.pdf";
+      link.textContent = "Download Invoice";
       link.classList.add("download-link");
       outputDiv.appendChild(link);
     } catch (err) {
