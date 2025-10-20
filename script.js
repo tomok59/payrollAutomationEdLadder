@@ -59,15 +59,24 @@ document.addEventListener("DOMContentLoaded", () => {
         NAME: Array.from(obj.NAME).join("\n"),
       }));
 
-      const cols = Object.keys(groupedArr[0]);
-      const lastCol = cols.pop();
-      cols.splice(2, 0, lastCol); // move NAME to position 2
+            // --- Define column order explicitly ---
+      const cols = [
+        "SCHOOL",
+        "TUTOR",
+        "NAME",
+        "Session ID",
+        "HRS",
+        "DATE",
+        "Duration",
+        "Hourly Rate",
+        "TOTAL $ P",
+      ];
+
 
       // --- Layout constants ---
       const margin = 30;
-      const headerHeight = 32;
       const fontFamily = "Arial";
-      const fontSize = 10;
+      const fontSize = 8;
       const lineHeight = 15;
       const padding = 8;
 
@@ -96,11 +105,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const contentWidth = measureCtx.measureText(widestText).width;
         let w = Math.max(headerWidth, contentWidth) + padding * 2;
 
-        if (c === "NAME") w *= 1.6;
-        if (c === "DATE") w *= 1.3;
-        if (c === "TOTAL $ P") w *= 1.4;
-        if (c === "Duration") w *= 1.3;
-        if (c === "Hourly Rate") w *= 1.3;
+        if (c === "NAME") w *= 1.3;
+        if (c === "DATE") w *= 1.5;
+        if (c === "TOTAL $ P") w *= 1.1;
+        if (c === "Date") w *= 1.3;
+        if (c === "Hourly Rate") w *= 1.1;
 
         baseWidths[c] = Math.min(Math.max(w, minWidth), maxWidth);
       });
@@ -137,10 +146,19 @@ document.addEventListener("DOMContentLoaded", () => {
         return linesOut.length ? linesOut : [""];
       }
 
+
+        // --- Compute dynamic header height based on wrapped column names ---
+      const headerLines = cols.map((c, i) =>
+        wrapTextSmart(measureCtx, c, colWidths[i])
+      );
+      const maxHeaderLines = Math.max(...headerLines.map(l => l.length));
+      const headerHeight = maxHeaderLines * lineHeight + padding * 2;
+
       // --- Step 7: Render high-DPI table pages ---
       const pageCanvases = [];
       let currentRows = [];
       let currentHeight = margin + headerHeight + padding;
+
 
       const renderPage = (rows) => {
         const canvas = document.createElement("canvas");
@@ -154,13 +172,33 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.fillRect(0, 0, pageWidth, pageHeight);
 
         // Header background
-        ctx.fillStyle = "#444";
+        ctx.fillStyle = "#2682e0";
         ctx.fillRect(margin, margin, pageWidth - margin * 2, headerHeight);
 
-        // --- Multi-line Header Text ---
+                // --- Multi-line Header Text ---
         ctx.fillStyle = "white";
         ctx.font = `bold ${fontSize}px ${fontFamily}`;
         let x = margin;
+
+        cols.forEach((c, i) => {
+          const lines = headerLines[i];
+          const totalHeight = lines.length * lineHeight;
+          let yStart = margin + (headerHeight - totalHeight) / 2 + fontSize / 2;
+
+          for (let j = 0; j < lines.length; j++) {
+            const tx = x + padding;
+            const ty = yStart + j * lineHeight;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, margin, colWidths[i], headerHeight);
+            ctx.clip();
+            ctx.fillText(lines[j], tx, ty);
+            ctx.restore();
+          }
+
+          x += colWidths[i];
+        });
+
         
         cols.forEach((c, i) => {
           const lines = wrapTextSmart(measureCtx, c, colWidths[i]); // reuse smart wrapper
