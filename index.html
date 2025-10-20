@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PDF + Excel Combiner</title>
+  <title>Invoice Automation</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="container">
-    <h1>PDF + Excel Combiner</h1>
-    <p>Upload a PDF and an Excel file. The app will add the processed Excel data as pages after the first PDF page.</p>
+    <h1>Invoice Automation</h1>
+    <p>Upload a PDF and an Excel file.</p>
 
     <div class="inputs">
       <label>PDF file:</label>
@@ -19,7 +19,7 @@
       <input type="file" id="excelInput" accept=".xlsx, .xls" />
     </div>
 
-    <button id="processBtn">Generate Combined PDF</button>
+    <button id="processBtn">Generate Invoice</button>
     <div id="output"></div>
   </div>
   <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
