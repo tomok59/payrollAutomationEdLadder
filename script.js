@@ -53,6 +53,18 @@ document.addEventListener("DOMContentLoaded", () => {
         NAME: Array.from(obj.NAME).join("\n"),
       }));
 
+            // --- Step 4.5: Format numeric columns to two decimals ---
+      const numericCols = ["HRS", "Hourly Rate", "TOTAL $ P"];
+      for (const row of groupedArr) {
+        for (const col of numericCols) {
+          const val = parseFloat(row[col]);
+          if (!isNaN(val)) {
+            row[col] = val.toFixed(2);
+          }
+        }
+      }
+
+
 
       // --- Step 4: Define fixed column order ---
       const cols = [
