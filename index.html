@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice Automation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Invoice Automation</h1>
+    <p>Upload a PDF and an Excel file.</p>
+
+    <div class="inputs">
+      <label>PDF file:</label>
+      <input type="file" id="pdfInput" accept="application/pdf" />
+      <br>
+      
+      <label>Excel file (.xlsx):</label>
+      <input type="file" id="excelInput" accept=".xlsx, .xls" />
+    </div>
+
+    <button id="processBtn">Generate Invoice</button>
+    <div id="output"></div>
+  </div>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
