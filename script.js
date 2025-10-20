@@ -28,7 +28,33 @@ document.addEventListener("DOMContentLoaded", () => {
       const [firstPage] = await tempPdf.copyPages(tempPdf, [0]);
       const { width: pageWidth, height: pageHeight } = firstPage.getSize();
 
-      // --- Step 3: Define fixed column order ---
+      // --- Step 3: Group rows by all columns except NAME ---
+      const grouped = {};
+      for (const row of data) {
+        // Build a key using all columns except NAME
+        const key = [
+          row["SCHOOL"] ?? "",
+          row["TUTOR"] ?? "",
+          row["Session ID"] ?? "",
+          row["HRS"] ?? "",
+          row["DATE"] ?? "",
+          row["Duration"] ?? "",
+          row["Hourly Rate"] ?? "",
+          row["TOTAL $ P"] ?? "",
+        ].join("|");
+
+        if (!grouped[key]) grouped[key] = { ...row, NAME: new Set() };
+        grouped[key].NAME.add(row["NAME"]);
+      }
+
+      // Convert the sets of names into newline-separated strings
+      const groupedArr = Object.values(grouped).map((obj) => ({
+        ...obj,
+        NAME: Array.from(obj.NAME).join("\n"),
+      }));
+
+
+      // --- Step 4: Define fixed column order ---
       const cols = [
         "SCHOOL",
         "TUTOR",
@@ -41,18 +67,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "TOTAL $ P",
       ];
 
-      // --- Step 4: Group names for multiple entries ---
-      const grouped = {};
-      for (const row of data) {
-        const key = cols.map((k) => row[k] ?? "").join("|");
-        if (!grouped[key]) grouped[key] = { ...row, NAME: new Set() };
-        grouped[key].NAME.add(row["NAME"]);
-      }
-
-      const groupedArr = Object.values(grouped).map((obj) => ({
-        ...obj,
-        NAME: Array.from(obj.NAME).join("\n"),
-      }));
 
       // --- Step 5: Layout settings ---
       const margin = 30;
